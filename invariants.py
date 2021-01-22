@@ -1,5 +1,6 @@
 import sympy
-
+from sympy import PurePoly, eye, pexquo, SparseMatrix, zeros
+from sympy.abc import t
 
 def _homology_generators(braid):
     hom_generators = [0]*(len(braid)-1)
@@ -15,7 +16,7 @@ def _homology_generators(braid):
 
 def seifert_matrix(braid):
     hom_generators = _homology_generators(braid)
-    s_matrix = sympy.zeros(len(hom_generators), len(hom_generators))
+    s_matrix = zeros(len(hom_generators), len(hom_generators))
 
     for i in range(len(hom_generators)):
         if hom_generators[i] == 0:
@@ -52,58 +53,72 @@ def _get_reduced_burau_matrices(n):
     :param n: number of strands of braid group
     :return: dictionary "reps" of reduced Burau matrices with reps[i] the Burau matrices for the ith braid generator
     """
-    t = sympy.Symbol('t')
     assert n >= 2
     reps = {}
     if n == 2:
-        reps[1], reps[-1] = sympy.eye(1), sympy.eye(1),
+        reps[1], reps[-1] = eye(1), eye(1),
         reps[1][0, 0], reps[-1][0, 0]  = -t, -1/t
     else:
-        reps[1], reps[-1] = sympy.eye(n - 1), sympy.eye(n - 1)
+        reps[1], reps[-1] = eye(n - 1), eye(n - 1)
         reps[1][0, 0], reps[-1][0, 0] = -t, -1/t
         reps[1][0, 1], reps[-1][0, 1] = 1, 1/t
         for i in range(2, n - 1):
-            reps[i], reps[-i] = sympy.eye(n - 1), sympy.eye(n - 1)
+            reps[i], reps[-i] = eye(n - 1), eye(n - 1)
             reps[i][i - 1, i - 2:i + 1] = [[t, -t, 1]]
             reps[-i][i - 1, i - 2:i + 1] = [[1, -1/t, 1/t]]
-        reps[n - 1], reps[-n + 1] = sympy.eye(n - 1), sympy.eye(n - 1)
+        reps[n - 1], reps[-n + 1] = eye(n - 1), eye(n - 1)
         reps[n - 1][n - 2, n - 3:n - 1] = [[t, -t]]
         reps[-n + 1][n - 2, n - 3:n - 1] = [[1, -1/t]]
     return reps
 
 def burau_rep(braid):
-    t = sympy.Symbol('t')
     reps = _get_reduced_burau_matrices(braid.n_strands)
-    matrix = sympy.eye(braid.n_strands - 1)
+    matrix = eye(braid.n_strands - 1)
     for gen in braid:
         matrix = matrix * reps[gen]
     return matrix
 
+def _normalise_laurent(polynomial, symbol):
+    """
+    multiplies laurent polynomial by +/- symbol^n so it has no negative powers of symbol, and non zero positive constant
+    :param polynomial: sympy Poly or PurePoly
+    :param symbol: sympy symbol
+    :return: normalised polynomial, sympy Poly or PurePoly
+    """
+    polynomial = polynomial.as_poly()
+    assert set(polynomial.gens).issubset({symbol,1/symbol}), f"polynomial is not a laurent polynomial in {symbol}"
+    if 1/symbol in polynomial.gens:
+        negative_degree = polynomial.degree(1/symbol)
+        polynomial = (polynomial.as_expr() * symbol**negative_degree).as_poly()
+
+    elif polynomial.gens == (symbol):
+        min_degree = min([mono[0] for mono in polynomial.monoms()])
+        polynomial = (polynomial.as_expr() * symbol**(-min_degree)).as_poly()
+    if polynomial.nth(0) < 0:
+        polynomial = - polynomial
+    return polynomial
+
+
 def burau_to_alexander(matrix):
     a, b = matrix.shape
     n = a + 1
-    t = sympy.Symbol('t')
-    matrix = sympy.eye(a) - matrix
+    matrix = eye(a) - matrix
     alex_poly = matrix.det()
-    alex_poly = alex_poly * (1 - t) * t**(2*n)
-    alex_poly = sympy.pexquo(alex_poly, ( 1 - t**n))
-    alex_poly = sympy.PurePoly(alex_poly.expand())
-    while alex_poly.nth(0) == 0:
-        alex_poly = sympy.exquo(alex_poly, sympy.PurePoly(t))
+    alex_poly = alex_poly * (1 - t)
+    alex_poly = _normalise_laurent(alex_poly, t)
+    alex_poly = pexquo(alex_poly.as_expr(), ( 1 - t**n)).expand()
+    alex_poly = PurePoly(alex_poly, t)
     if alex_poly.nth(0) < 0:
         alex_poly = - alex_poly
     return alex_poly
 
+
 def seifert_to_alexander(seifert_matrix, method = "seifert"):
-    if method == "seifert":
-        t = sympy.Symbol('t')
-        n, m = seifert_matrix.shape
-        assert n == m, "non square matrix received"
-        matrix = sympy.SparseMatrix(t * seifert_matrix - seifert_matrix.transpose())
-        alex_poly = t**(-n//2) * matrix.det(method = "berkowitz")
-        alex_poly = sympy.PurePoly(sympy.expand(alex_poly))
-    if method == "bureau":
-        pass
+    n, m = seifert_matrix.shape
+    assert n == m, "non square matrix received"
+    matrix = SparseMatrix(t * seifert_matrix - seifert_matrix.transpose())
+    alex_poly = t**(-n//2) * matrix.det(method = "berkowitz")
+    alex_poly = PurePoly(sympy.expand(alex_poly))
     return alex_poly
 
 
@@ -111,14 +126,12 @@ def signature(seifert_matrix):
     n, m = seifert_matrix.shape
     assert n == m, "non square matrix received"
     matrix = seifert_matrix + seifert_matrix.transpose()
-
-    t = sympy.Symbol('t')
     characteristic_poly = matrix.charpoly(t)
     #remove 0 eigenvalues
     while characteristic_poly.nth(0) == 0:
-        characteristic_poly = sympy.exquo(characteristic_poly, sympy.PurePoly(t))
+        characteristic_poly = pexquo(characteristic_poly, PurePoly(t))
 
-    sig = sympy.degree(characteristic_poly)
+    sig = characteristic_poly.degree(t)
     negative_root_intervals = characteristic_poly.intervals(sup=0)
     for interval, multiplicity in negative_root_intervals:
         assert interval[1] <= 0, ("Error in signature computation, root of characteristic equation was not isolated" +
