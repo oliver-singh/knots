@@ -1,4 +1,11 @@
 
+import sys
+import os
+
+sys.path.append(os.path.dirname(__file__))
+
+import invariants
+
 class Braid:
     def __init__(self, braid_list=None, n_strands=None):
         if braid_list is None:
@@ -21,10 +28,14 @@ class Braid:
         return max_gen
 
     @classmethod
-    def from_string(cls, braid_string):
-        knot = cls()
-        knot.braid_string = braid_string
-        return knot
+    def from_string(cls, braid_string, n_strands=None):
+        braid_string = braid_string.replace(";", ",")
+        braid_string = braid_string.replace("{", "")
+        braid_string = braid_string.replace("}", "")
+        braid_string = braid_string.replace(" ", "")
+        braid_list = braid_string.split(",")
+        braid_list = [int(gen) for gen in braid_list]
+        return cls(braid_list, n_strands)
 
     @classmethod
     def empty(cls, n_strands):
@@ -82,6 +93,10 @@ class Braid:
         assert isinstance(other, Braid)
         return self * other._bump_gen(self.n_strands)
 
+    def __neg__(self):
+        braid_list = [-gen for gen in self._braid_list]
+        return Braid(braid_list, n_strands=self.n_strands)
+
     def __mul__(self, other):
         if isinstance(other, Braid):
             n_strands = max(self.n_strands, other.n_strands)
@@ -89,6 +104,9 @@ class Braid:
             product = Braid(braid_list, n_strands=n_strands)
         elif isinstance(other, int):
             product = Braid()
+            if other < 0:
+                other = abs(other)
+                self = - self
             for i in range(other):
                 product += self
         else:
@@ -97,10 +115,7 @@ class Braid:
 
     def __rmul__(self, other):
         assert isinstance(other, int)
-        product = Braid()
-        for i in range(other):
-            product += self
-        return product
+        return self * other
 
     def __pow__(self, power):
         assert isinstance(power, int)
@@ -130,4 +145,55 @@ class Braid:
 
         return Braid(braid_list, n_strands=self.n_strands)
 
+    #invariants
+    def seifert_matrix(self): # maybe cache this one later - store as property of braid, and add a clear_cache method
+        #if not hasattr(self, "_seifert_matrix") or self._seifert_matrix is None:
+        #    self._seifert_matrix = invariants.seifert_matrix(self)
+        #return self._seifert_matrix
 
+        matrix = invariants.seifert_matrix(self)
+        return matrix
+
+    def signature(self):
+        matrix = self.seifert_matrix()
+        sig = invariants.signature(matrix)
+        return sig
+
+    def burau_rep(self):
+        matrix = invariants.burau_rep(self)
+        return matrix
+
+    def alexander_poly(self):
+        burau_matrix = self.burau_rep()
+        poly = invariants.burau_to_alexander(burau_matrix)
+        return poly
+
+
+def empty(n):
+    return Braid(n_strands=n)
+
+
+def braid_range(*args, positive=True):
+    """
+    Returns a braid using list given by in built python range function. Excludes 0.
+    :param args: Args to pass to range
+    :param positive: If false negates the whole braid (negative braids may also be obtained by range(-4,-1)
+    :return: a braid with a generator for each
+    """
+    braid_list = list(range(*args))
+    braid_list = [gen for gen in braid_list if gen != 0]
+    if not positive:
+        braid_list = [-gen for gen in braid_list]
+    return Braid(braid_list)
+
+
+def full_twist(n):
+    positive = True
+    if n < 0:
+        positive = False
+        n = abs(n)
+    twist = braid_range(n) ** n
+
+    if not positive:
+        twist = twist**(-1)
+    return twist

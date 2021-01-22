@@ -94,7 +94,7 @@ def burau_to_alexander(matrix):
         alex_poly = - alex_poly
     return alex_poly
 
-def alexander_poly(seifert_matrix, method = "seifert"):
+def seifert_to_alexander(seifert_matrix, method = "seifert"):
     if method == "seifert":
         t = sympy.Symbol('t')
         n, m = seifert_matrix.shape
