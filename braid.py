@@ -132,7 +132,8 @@ class Braid:
         return self**-1
 
     def simplify(self):
-        braid_list = [0]
+        braid_list = {}
+        i = 0
         for gen in self._braid_list:
             if gen != -braid_list[-1]:
                 braid_list += [gen]
