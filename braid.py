@@ -132,18 +132,55 @@ class Braid:
         return self**-1
 
     def simplify(self):
-        braid_list = {}
-        i = 0
-        for gen in self._braid_list:
-            if gen != -braid_list[-1]:
-                braid_list += [gen]
-            else:
-                braid_list.pop(-1)
-        braid_list.pop(0)
-        while braid_list != [] and braid_list[0] == -braid_list[-1]:
-            braid_list.pop(0)
-            braid_list.pop(-1)
+        braid_list = self._braid_list
 
+        def check_unobstructed(position, gen):
+            abs_gens = [abs(gen) for gen in braid_list]
+            if position > last_position[gen]:
+                intermediate_braids = abs_gens[last_position[gen]+1:position]
+            else:
+                intermediate_braids= abs_gens[last_position[gen]+1:] + abs_gens[:position]
+            print(intermediate_braids)
+            ob_above = gen + 1 in intermediate_braids
+            ob_below = gen - 1 in intermediate_braids
+            ob = gen in intermediate_braids
+            obstructed = ob_above or ob_below or ob
+            return obstructed
+
+        last_position = {}
+        last_sign = {}
+        i = 0
+        while i < 2 * len(braid_list):
+            print("*************")
+            print("i=",i)
+            print("braid=", braid_list)
+            print(last_position)
+
+            current_position = i % len(braid_list)
+            gen = abs(braid_list[current_position])
+            sign = braid_list[current_position] // gen
+            if gen in last_position.keys():
+
+                print("found pair")
+                if current_position == last_position[gen]:
+                    i += 1
+                    continue
+                if sign != last_sign[gen]:
+                    print("found cancelling pair")
+                    if not check_unobstructed(current_position, gen):
+                        print("unobstructed!")
+                        first = min(current_position, last_position[gen])
+                        last = max(current_position, last_position[gen])
+                        braid_list.pop(last)
+                        braid_list.pop(first)
+
+                        i=0
+                        last_position = {}
+                        last_sign = {}
+                        continue
+            last_position[gen] = current_position
+            last_sign[gen] = sign
+            i += 1
         return Braid(braid_list, n_strands=self.n_strands)
 
     #invariants
