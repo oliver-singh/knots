@@ -2,6 +2,10 @@ import sympy
 from sympy import PurePoly, eye, pexquo, SparseMatrix, zeros
 from sympy.abc import t
 
+sys.path.append(os.path.dirname(__file__))
+
+
+
 def _homology_generators(braid):
     hom_generators = [0]*(len(braid)-1)
     for i in range(len(braid)-1):
@@ -85,15 +89,15 @@ def _normalise_laurent(polynomial, symbol):
     :param symbol: sympy symbol
     :return: normalised polynomial, sympy Poly or PurePoly
     """
-    polynomial = polynomial.as_poly()
+    polynomial = polynomial.as_poly(t, 1/t)
     assert set(polynomial.gens).issubset({symbol,1/symbol}), f"polynomial is not a laurent polynomial in {symbol}"
     if 1/symbol in polynomial.gens:
         negative_degree = polynomial.degree(1/symbol)
-        polynomial = (polynomial.as_expr() * symbol**negative_degree).as_poly()
+        polynomial = (polynomial.as_expr() * symbol**negative_degree).as_poly(symbol)
 
     elif polynomial.gens == (symbol):
         min_degree = min([mono[0] for mono in polynomial.monoms()])
-        polynomial = (polynomial.as_expr() * symbol**(-min_degree)).as_poly()
+        polynomial = (polynomial.as_expr() * symbol**(-min_degree)).as_poly(symbol)
     if polynomial.nth(0) < 0:
         polynomial = - polynomial
     return polynomial
@@ -103,6 +107,7 @@ def burau_to_alexander(matrix):
     a, b = matrix.shape
     n = a + 1
     matrix = eye(a) - matrix
+    matrix = matrix.expand()
     alex_poly = matrix.det()
     alex_poly = alex_poly * (1 - t)
     alex_poly = _normalise_laurent(alex_poly, t)
@@ -113,7 +118,7 @@ def burau_to_alexander(matrix):
     return alex_poly
 
 
-def seifert_to_alexander(seifert_matrix, method = "seifert"):
+def seifert_to_alexander(seifert_matrix):
     n, m = seifert_matrix.shape
     assert n == m, "non square matrix received"
     matrix = SparseMatrix(t * seifert_matrix - seifert_matrix.transpose())

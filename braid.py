@@ -140,7 +140,6 @@ class Braid:
                 intermediate_braids = abs_gens[last_position[gen]+1:position]
             else:
                 intermediate_braids= abs_gens[last_position[gen]+1:] + abs_gens[:position]
-            print(intermediate_braids)
             ob_above = gen + 1 in intermediate_braids
             ob_below = gen - 1 in intermediate_braids
             ob = gen in intermediate_braids
@@ -151,24 +150,15 @@ class Braid:
         last_sign = {}
         i = 0
         while i < 2 * len(braid_list):
-            print("*************")
-            print("i=",i)
-            print("braid=", braid_list)
-            print(last_position)
-
             current_position = i % len(braid_list)
             gen = abs(braid_list[current_position])
             sign = braid_list[current_position] // gen
             if gen in last_position.keys():
-
-                print("found pair")
                 if current_position == last_position[gen]:
                     i += 1
                     continue
                 if sign != last_sign[gen]:
-                    print("found cancelling pair")
                     if not check_unobstructed(current_position, gen):
-                        print("unobstructed!")
                         first = min(current_position, last_position[gen])
                         last = max(current_position, last_position[gen])
                         braid_list.pop(last)
@@ -183,11 +173,146 @@ class Braid:
             i += 1
         return Braid(braid_list, n_strands=self.n_strands)
 
-    #invariants
+    def super_simplify(self):
+
+        def _generator_bump(strand, generator):
+            abs_gen = abs(generator)
+            sign = generator // abs_gen
+            over_under = None
+            if abs_gen == strand:
+                strand += 1
+                if sign == 1:
+                    over_under = "under"
+                else:
+                    over_under = "over"
+            elif abs_gen == strand - 1:
+                strand += -1
+                if sign == -1:
+                    over_under = "under"
+                else:
+                    over_under = "over"
+            return strand, over_under
+
+        def _find_disk():
+            over_under = []
+            obs = False
+            for k, lower, upper in zip(range(i + 1, j-1), lower_s[:-1], upper_s[:-1]):
+                sign = braid_list[k]//abs(braid_list[k])
+                abs_gen = abs(braid_list[k])
+                print("********************************")
+                print("i:",i)
+                print("braid:",braid_list)
+                print("over_under",over_under)
+                print("upper:",upper_s)
+                print("lower",lower_s)
+
+                if abs_gen == lower - 1:
+                    if sign == 1:
+                        over_under = ["under"] + over_under
+                    else:
+                        over_under = ["over"] + over_under
+                elif abs_gen == upper:
+                    if sign == 1:
+                        over_under = over_under + ["over"]
+                    else:
+                        over_under = over_under + ["under"]
+                elif abs_gen == lower:
+                    if over_under[0] == "over" and sign == -1:
+                        obs = True
+                        break
+                    if over_under[0] == "under" and sign == +1:
+                        obs = True
+                        break
+                    over_under = over_under[1:]
+                elif abs_gen == upper - 1:
+                    if over_under[0] == "over" and sign == 1:
+                        obs = True
+                        break
+                    if over_under[0] == "under" and sign == -1:
+                        obs = True
+                        break
+                    over_under = over_under[:-1]
+                elif lower + 1 < abs_gen < upper:
+                    if over_under[abs_gen - lower -1] == over_under[abs_gen - lower]:
+                        obs = True
+                        break
+                    elif over_under[abs_gen - lower -1] == "under" and sign == -1:
+                        obs = True
+                        break
+                    elif over_under[abs_gen - lower - 1] == "upper" and sign == 1:
+                        obs = True
+                        break
+                    else:
+                        a, b = over_under[abs_gen - lower], over_under[abs_gen - lower - 1]
+                        over_under[abs_gen - lower], over_under[abs_gen - lower - 1] = b, a
+            return obs
+
+        i = -1
+        braid_list = self._braid_list
+        while i < len(braid_list) - 1:
+            i = (i + 1)
+            position = i % len(braid_list)
+            base_gen = abs(braid_list[position])
+            lower_s = [base_gen]
+            upper_s = [base_gen + 1]
+            base_sign = braid_list[position]//base_gen
+
+            base_strands_all_over = True
+            base_strands_all_under = True
+
+            j=position
+            while (position - 1 - j) % len(braid_list) != 0 and lower_s[-1] < upper_s[-1]:
+
+                j = (j + 1) % len(braid_list)
+                lower_end = lower_s[-1]
+                upper_end = upper_s[-1]
+
+
+                if base_strands_all_over or base_strands_all_under:
+                    if lower_end + 1 == upper_end:
+                        base_strands_all_over = True
+                        base_strands_all_under = True
+                else:
+                    break
+                current_gen = braid_list[j]
+
+                lower_end, lower_over_under = _generator_bump(lower_end, current_gen)
+                upper_end, upper_over_under = _generator_bump(upper_end, current_gen)
+
+                if lower_end < upper_end:
+                    if lower_over_under == "over" or upper_over_under == "over":
+                        base_strands_all_under = False
+                    if (lower_over_under == "under") or (upper_over_under == "under"):
+                        base_strands_all_over = False
+
+                lower_s += [lower_end]
+                upper_s += [upper_end]
+            if braid_list[j]//abs(braid_list[j]) == base_sign:
+                continue
+            if lower_s[-1] > upper_s[-1]:
+                obstructed = True
+                if base_strands_all_over or base_strands_all_under:
+                    """
+                    print("*************************cancellation************************")
+                    print("position", position)
+                    print("braid:", braid_list)
+                    print("upper strand: ", upper_s)
+                    print("lower strand:", lower_s)
+                    print("all under:", base_strands_all_under)
+                    print("all over:", base_strands_all_over)
+                    """
+                    first, last = sorted([position, j])
+                    braid_list.pop(last)
+                    braid_list.pop(first)
+                    i = -1
+
+        return Braid(braid_list, n_strands=self.n_strands)
+
+    # invariants
     def seifert_matrix(self): # maybe cache this one later - store as property of braid, and add a clear_cache method
-        #if not hasattr(self, "_seifert_matrix") or self._seifert_matrix is None:
+        # if not hasattr(self, "_seifert_matrix") or self._seifert_matrix is None:
         #    self._seifert_matrix = invariants.seifert_matrix(self)
-        #return self._seifert_matrix
+        # return self._seifert_matrix
 
         matrix = invariants.seifert_matrix(self)
         return matrix
@@ -201,9 +326,13 @@ class Braid:
         matrix = invariants.burau_rep(self)
         return matrix
 
-    def alexander_poly(self):
-        burau_matrix = self.burau_rep()
-        poly = invariants.burau_to_alexander(burau_matrix)
+    def alexander_poly(self, method="burau"):
+        if method == "burau":
+            matrix = self.burau_rep()
+            poly = invariants.burau_to_alexander(matrix)
+        elif method == "seifert":
+            matrix = self.seifert_matrix()
+            poly = invariants.seifert_to_alexander(matrix)
         return poly
 
 
@@ -235,3 +364,7 @@ def full_twist(n):
     if not positive:
         twist = twist**(-1)
     return twist
+
+class Sbraid(Braid):
+    def __init__(self):
+        super().__init__()
